@@ -20,6 +20,9 @@ const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
 const int rBins = 100;
 const float radInc = degreeInc * M_PI / 180;
+__constant__ float d_Cos[degreeBins];
+__constant__ float d_Sin[degreeBins];
+
 //*****************************************************************
 // The CPU function returns a pointer to the accummulator
 void CPU_HoughTran(unsigned char *pic, int w, int h, int **acc)
@@ -71,7 +74,7 @@ void CPU_HoughTran(unsigned char *pic, int w, int h, int **acc)
 
 // GPU kernel. One thread per image pixel is spawned.
 // The accummulator memory needs to be allocated by the host in global memory
-__global__ void GPU_HoughTran(unsigned char *pic, int w, int h, int *acc, float rMax, float rScale, float *d_Cos, float *d_Sin)
+__global__ void GPU_HoughTran(unsigned char *pic, int w, int h, int *acc, float rMax, float rScale)
 {
   // TODO calcular: int gloID = ?
   int gloID = blockIdx.x * blockDim.x + threadIdx.x;
@@ -122,8 +125,10 @@ int main(int argc, char **argv)
   int w = inImg.x_dim;
   int h = inImg.y_dim;
 
-  float *d_Cos;
-  float *d_Sin;
+
+  float *pcCos = (float *)malloc(sizeof(float) * degreeBins);
+  float *pcSin = (float *)malloc(sizeof(float) * degreeBins);
+  float rad = 0;
 
   cudaMalloc((void **)&d_Cos, sizeof(float) * degreeBins);
   cudaMalloc((void **)&d_Sin, sizeof(float) * degreeBins);
@@ -131,10 +136,7 @@ int main(int argc, char **argv)
   // CPU calculation
   CPU_HoughTran(inImg.pixels, w, h, &cpuht);
 
-  // pre-compute values to be stored
-  float *pcCos = (float *)malloc(sizeof(float) * degreeBins);
-  float *pcSin = (float *)malloc(sizeof(float) * degreeBins);
-  float rad = 0;
+
   for (i = 0; i < degreeBins; i++)
   {
     pcCos[i] = cos(rad);
@@ -145,8 +147,8 @@ int main(int argc, char **argv)
   float rMax = sqrt(1.0 * w * w + 1.0 * h * h) / 2;
   float rScale = 2 * rMax / rBins;
 
-  cudaMemcpy(d_Cos, pcCos, sizeof(float) * degreeBins, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Sin, pcSin, sizeof(float) * degreeBins, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(d_Cos, pcCos, sizeof(float) * degreeBins);
+  cudaMemcpyToSymbol(d_Sin, pcSin, sizeof(float) * degreeBins);
 
   unsigned char *d_in;
   int *d_hough;
@@ -167,7 +169,7 @@ int main(int argc, char **argv)
 
   // Launch the kernel
   int blockNum = ceil((float)w * h / 256.0);
-  GPU_HoughTran<<<blockNum, 256>>>(d_in, w, h, d_hough, rMax, rScale, d_Cos, d_Sin);
+  GPU_HoughTran<<<blockNum, 256>>>(d_in, w, h, d_hough, rMax, rScale);
 
   // Record the stop event
   cudaEventRecord(stop, NULL);
@@ -176,7 +178,7 @@ int main(int argc, char **argv)
   // Calculate and print the elapsed time
   float milliseconds = 0;
   cudaEventElapsedTime(&milliseconds, start, stop);
-  printf("GPU Hough Transform tomo %f milisegundos\n", milliseconds);
+  printf("GPU Hough Constante Transform tomo %f milisegundos\n", milliseconds);
 
   // Copy results back to host
   cudaMemcpy(h_hough, d_hough, sizeof(int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
@@ -189,8 +191,6 @@ int main(int argc, char **argv)
   }
 
   // Free dynamically allocated memory
-  cudaFree(d_Cos);
-  cudaFree(d_Sin);
   cudaFree(d_in);
   cudaFree(d_hough);
   free(pcCos);
