@@ -84,18 +84,17 @@ __global__ void GPU_HoughTran(unsigned char *pic, int w, int h, int *acc, float 
   int xCent = w / 2;
   int yCent = h / 2;
 
-  // TODO explicar bien bien esta parte. Dibujar un rectangulo a modo de imagen sirve para visualizarlo mejor
+
   int xCoord = gloID % w - xCent;
   int yCoord = yCent - gloID / w;
 
-  // TODO eventualmente usar memoria compartida para el acumulador
+
 
   if (pic[gloID] > 0)
   {
     for (int tIdx = 0; tIdx < degreeBins; tIdx++)
     {
-      // TODO utilizar memoria constante para senos y cosenos
-      // float r = xCoord * cos(tIdx) + yCoord * sin(tIdx); //probar con esto para ver diferencia en tiempo
+
       float r = xCoord * d_Cos[tIdx] + yCoord * d_Sin[tIdx];
       int rIdx = (r + rMax) / rScale;
       // debemos usar atomic, pero que race condition hay si somos un thread por pixel? explique
@@ -103,9 +102,7 @@ __global__ void GPU_HoughTran(unsigned char *pic, int w, int h, int *acc, float 
     }
   }
 
-  // TODO eventualmente cuando se tenga memoria compartida, copiar del local al global
-  // utilizar operaciones atomicas para seguridad
-  // faltara sincronizar los hilos del bloque en algunos lados
+  
 }
 
 //*****************************************************************
@@ -178,7 +175,7 @@ int main(int argc, char **argv)
   // Calculate and print the elapsed time
   float milliseconds = 0;
   cudaEventElapsedTime(&milliseconds, start, stop);
-  printf("GPU Hough Constante Transform tomo %f milisegundos\n", milliseconds);
+  printf("GPU Hough Global y Constante Transform tomo %f milisegundos\n", milliseconds);
 
   // Copy results back to host
   cudaMemcpy(h_hough, d_hough, sizeof(int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
